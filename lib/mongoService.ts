@@ -48,16 +48,6 @@ function createVercelCompatibleUri(originalUri: string): string {
 }
 
 export async function createVercelMongoConnection(): Promise<MongoClient> {
-  // Always create fresh connection in serverless environment
-  if (globalClient) {
-    try {
-      await globalClient.close();
-    } catch (e) {
-      // Ignore close errors
-    }
-    globalClient = null;
-  }
-
   const originalUri = process.env.MONGODB_URI;
   if (!originalUri) {
     throw new Error('MONGODB_URI environment variable not found');
@@ -66,50 +56,59 @@ export async function createVercelMongoConnection(): Promise<MongoClient> {
   const uri = createVercelCompatibleUri(originalUri);
   console.log('🚀 Establishing MongoDB connection for Vercel Lambda...');
 
-  // Optimized configuration for Vercel serverless environment
+  // Ultra-aggressive optimization for Vercel serverless + Atlas
   const options: MongoClientOptions = {
-    // Connection pooling optimized for serverless
+    // Minimal connection pooling for serverless
     maxPoolSize: 1,
     minPoolSize: 0,
-    maxIdleTimeMS: 30000,
     
-    // Generous timeouts for Lambda cold starts
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
-    heartbeatFrequencyMS: 30000,
+    // Reduced timeouts for faster failure detection
+    serverSelectionTimeoutMS: 10000,  // Reduced from 30s to 10s
+    socketTimeoutMS: 20000,           // Reduced from 45s to 20s  
+    connectTimeoutMS: 10000,          // Reduced from 30s to 10s
+    heartbeatFrequencyMS: 60000,      // Increased for less frequent checks
     
-    // Let MongoDB Atlas handle all TLS configuration automatically
-    // This prevents conflicts and TLS negotiation issues
+    // Critical for Vercel Lambda + Atlas compatibility
+    maxIdleTimeMS: 5000,              // Close idle connections quickly
+    waitQueueTimeoutMS: 5000,         // Don't wait long for connections
     
-    // Compression for better performance
-    compressors: ['zlib'],
+    // Network optimizations
+    family: 4,                        // Force IPv4
     
-    // Force IPv4 for better Lambda compatibility
-    family: 4,
+    // Disable compression to reduce overhead
+    // compressors: [],
+    
+    // Direct connection for better performance
+    directConnection: false,          // Let Atlas load balance
   };
 
   try {
     const client = new MongoClient(uri, options);
     
-    // Implement connection with timeout
+    // Faster connection attempt with shorter timeout
     const connectPromise = client.connect();
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000);
+      setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000);
     });
     
     await Promise.race([connectPromise, timeoutPromise]);
     
-    // Test connection with ping
-    await client.db('admin').command({ ping: 1 });
+    // Quick ping test with timeout
+    const pingPromise = client.db('admin').command({ ping: 1 });
+    const pingTimeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Ping timeout after 3 seconds')), 3000);
+    });
+    
+    await Promise.race([pingPromise, pingTimeoutPromise]);
     
     console.log('✅ MongoDB Atlas connection successful!');
-    globalClient = client;
     return client;
     
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error);
-    throw new Error(`MongoDB Atlas connection failed: ${error instanceof Error ? error.message.substring(0, 200) : 'Unknown error'}`);
+    // Don't cache failed connections
+    globalClient = null;
+    throw new Error(`MongoDB Atlas connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
