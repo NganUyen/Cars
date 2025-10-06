@@ -1,0 +1,47 @@
+{
+  "name": "autotrader-crawler",
+  "version": "1.0.0",
+  "description": "Web crawler for extracting car data from autotrader.co.uk",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "ts-node src/test.ts",
+    "examples": "ts-node src/examples.ts",
+    "examples:popular": "ts-node src/examples.ts popular",
+    "analytics": "ts-node src/analytics.ts",
+    "test:specs": "ts-node src/testTechSpecs.ts",
+    "crawl": "ts-node src/cli.ts",
+    "install-playwright": "playwright install",
+    "setup": "node -e \"console.log('Run setup-mongodb.bat (Windows) or setup-mongodb.sh (Linux/Mac)'))\"",
+    "db:stats": "ts-node src/cli.ts db-stats",
+    "db:search": "ts-node src/cli.ts db-search",
+    "db:cleanup": "ts-node src/cli.ts db-cleanup",
+    "test:csv-to-mongodb": "ts-node test-csv-to-mongodb.ts",
+    "test:mongodb": "ts-node tests/test-mongodb.ts"
+  },
+  "keywords": [
+    "crawler",
+    "playwright",
+    "typescript",
+    "autotrader"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2",
+    "@types/mongodb": "^4.0.7",
+    "@types/uuid": "^9.0.6"
+  },
+  "dependencies": {
+    "playwright": "^1.39.0",
+    "csv-writer": "^1.6.0",
+    "mongodb": "^6.2.0",
+    "dotenv": "^16.3.1",
+    "uuid": "^9.0.1",
+    "csv-parse": "^5.5.2"
+  }
+}
