@@ -1,28 +1,49 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from 'mongodb'
 
-const uri = process.env.MONGODB_URI;
+// Get and modify MongoDB URI for better Vercel compatibility
+let uri = process.env.MONGODB_URI;
+
+if (uri) {
+  // Force SSL parameters in connection string for Atlas
+  const url = new URL(uri);
+  url.searchParams.set('ssl', 'true');
+  url.searchParams.set('retryWrites', 'false');  // Disable to avoid timeouts
+  url.searchParams.set('serverSelectionTimeoutMS', '5000');
+  url.searchParams.set('connectTimeoutMS', '5000');
+  url.searchParams.set('maxPoolSize', '1');
+  uri = url.toString();
+  console.log('🔧 Modified MongoDB URI for Vercel compatibility');
+}
+
+// Aggressive SSL configuration for Vercel + MongoDB Atlas compatibility
 const options: MongoClientOptions = {
-  // Essential SSL/TLS options for MongoDB Atlas in Vercel
+  // SSL/TLS Configuration - Allow all certificates for Vercel compatibility
   tls: true,
-  tlsAllowInvalidCertificates: false,
-  tlsAllowInvalidHostnames: false,
+  tlsAllowInvalidCertificates: true,  // Critical for serverless SSL issues
+  tlsAllowInvalidHostnames: true,
+  tlsInsecure: true,
   
-  // Connection pool settings for serverless
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  maxIdleTimeMS: 30000,
+  // Network and timeout settings optimized for serverless
+  family: 4,                          // Force IPv4
+  serverSelectionTimeoutMS: 5000,     // Quick server selection
+  connectTimeoutMS: 5000,             // Quick connection
+  socketTimeoutMS: 5000,              // Quick socket timeout
+  heartbeatFrequencyMS: 30000,        // Less frequent heartbeats
   
-  // Server selection and connection timeouts
-  serverSelectionTimeoutMS: 10000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 10000,
+  // Minimal connection pooling for serverless
+  maxPoolSize: 1,                     // Single connection only
+  minPoolSize: 0,                     // No minimum connections
+  maxIdleTimeMS: 10000,               // Quick cleanup
+  waitQueueTimeoutMS: 2500,           // Fast queue timeout
   
-  // Retry settings
-  retryWrites: true,
-  retryReads: true,
+  // Disable retries to avoid timeouts
+  retryWrites: false,                 // Disable write retries
+  retryReads: false,                  // Disable read retries
   
-  // Compression for better performance
+  // Compression and auth
   compressors: ['zlib'],
+  authSource: 'admin',
+  directConnection: false,
 };
 
 let client: MongoClient;
@@ -53,10 +74,71 @@ if (process.env.NODE_ENV === "development") {
 // This is the default export that will be used in API routes
 export default clientPromise;
 
-// Helper functions for easier database operations
+// Alternative connection configurations to try in sequence
+const alternativeOptions: MongoClientOptions[] = [
+  // Option 1: Most permissive SSL settings
+  {
+    tls: true,
+    tlsAllowInvalidCertificates: true,
+    tlsAllowInvalidHostnames: true,
+    tlsInsecure: true,
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+    maxPoolSize: 1,
+    retryWrites: false,
+  },
+  
+  // Option 2: Standard SSL with longer timeout
+  {
+    tls: true,
+    serverSelectionTimeoutMS: 15000,
+    connectTimeoutMS: 15000,
+    maxPoolSize: 1,
+    retryWrites: false,
+  },
+  
+  // Option 3: Minimal configuration
+  {
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
+    maxPoolSize: 1,
+  }
+];
+
+async function createFallbackConnection(): Promise<MongoClient> {
+  console.log('🚨 Trying alternative connection configurations...');
+  
+  for (let i = 0; i < alternativeOptions.length; i++) {
+    try {
+      console.log(`🔄 Attempting connection method ${i + 1}/${alternativeOptions.length}...`);
+      const client = new MongoClient(uri!, alternativeOptions[i]);
+      return await client.connect();
+    } catch (error) {
+      console.warn(`❌ Connection method ${i + 1} failed:`, error instanceof Error ? error.message : 'Unknown error');
+      if (i === alternativeOptions.length - 1) {
+        throw error; // Re-throw the last error
+      }
+    }
+  }
+  
+  throw new Error('All connection methods failed');
+}
+
+// Helper functions for easier database operations with fallback
 export async function getDatabase(): Promise<Db> {
-  const client = await clientPromise;
-  return client.db(process.env.MONGODB_DATABASE || 'ADY');
+  try {
+    const client = await clientPromise;
+    return client.db(process.env.MONGODB_DATABASE || 'ADY');
+  } catch (error) {
+    console.warn('⚠️ Primary connection failed, trying fallback:', error);
+    try {
+      const fallbackClient = await createFallbackConnection();
+      return fallbackClient.db(process.env.MONGODB_DATABASE || 'ADY');
+    } catch (fallbackError) {
+      console.error('❌ Fallback connection also failed:', fallbackError);
+      throw new Error(`MongoDB connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 export async function getCollection(): Promise<Collection> {
@@ -64,14 +146,18 @@ export async function getCollection(): Promise<Collection> {
   return db.collection(process.env.MONGODB_COLLECTION || 'Data');
 }
 
-// Database statistics function
+// Database statistics function with enhanced error handling
 export async function getDatabaseStats() {
   try {
     console.log('📊 Fetching database statistics...');
     console.log('🔗 MongoDB URI configured:', !!process.env.MONGODB_URI);
     console.log('🏗️ Environment:', process.env.NODE_ENV || 'unknown');
+    console.log('📋 Connection options applied: SSL insecure mode enabled');
     
+    const startTime = Date.now();
     const collection = await getCollection();
+    const connectionTime = Date.now() - startTime;
+    console.log(`⚡ Collection access completed in ${connectionTime}ms`);
     
     // Use estimatedDocumentCount for better performance
     const totalCars = await collection.estimatedDocumentCount();
