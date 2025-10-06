@@ -1,7 +1,29 @@
 import { MongoClient, MongoClientOptions, Db, Collection } from 'mongodb'
 
 const uri = process.env.MONGODB_URI;
-const options: MongoClientOptions = {};
+const options: MongoClientOptions = {
+  // Essential SSL/TLS options for MongoDB Atlas in Vercel
+  tls: true,
+  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidHostnames: false,
+  
+  // Connection pool settings for serverless
+  maxPoolSize: 10,
+  minPoolSize: 1,
+  maxIdleTimeMS: 30000,
+  
+  // Server selection and connection timeouts
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 10000,
+  
+  // Retry settings
+  retryWrites: true,
+  retryReads: true,
+  
+  // Compression for better performance
+  compressors: ['zlib'],
+};
 
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
@@ -46,6 +68,9 @@ export async function getCollection(): Promise<Collection> {
 export async function getDatabaseStats() {
   try {
     console.log('📊 Fetching database statistics...');
+    console.log('🔗 MongoDB URI configured:', !!process.env.MONGODB_URI);
+    console.log('🏗️ Environment:', process.env.NODE_ENV || 'unknown');
+    
     const collection = await getCollection();
     
     // Use estimatedDocumentCount for better performance
@@ -157,5 +182,37 @@ export async function searchCars(make?: string, model?: string, limit = 50) {
   } catch (error) {
     console.error('❌ Car search failed:', error);
     throw error;
+  }
+}
+
+// Connection test function
+export async function testConnection() {
+  try {
+    console.log('🔧 Testing MongoDB connection...');
+    const client = await clientPromise;
+    
+    // Ping the database to verify connection
+    await client.db('admin').command({ ping: 1 });
+    console.log('✅ MongoDB connection successful');
+    
+    // Test database access
+    const db = await getDatabase();
+    const collections = await db.listCollections().toArray();
+    console.log(`📂 Available collections: ${collections.map(c => c.name).join(', ')}`);
+    
+    return {
+      status: 'success',
+      message: 'Connection established successfully',
+      collections: collections.map(c => c.name),
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.error('❌ MongoDB connection test failed:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    };
   }
 }

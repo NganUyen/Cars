@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { testConnection } from '../../lib/mongodb'
 
 export default async function handler(
   req: NextApiRequest,
@@ -8,8 +9,8 @@ export default async function handler(
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  console.log('🔍 MongoDB Connection Diagnostic Starting...');
-
+  console.log('🔧 API Request: MongoDB Debug Test');
+  
   const diagnostics = {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
@@ -28,101 +29,54 @@ export default async function handler(
     return res.status(500).json({
       status: 'error',
       message: 'MONGODB_URI environment variable not found',
-      diagnostics
+      diagnostics,
+      troubleshooting: {
+        message: 'Set MONGODB_URI in Vercel Environment Variables',
+        steps: ['Go to Vercel Dashboard → Project Settings → Environment Variables']
+      }
     });
   }
 
   try {
-    console.log('🧪 Testing MongoDB connection...');
+    // Use the new connection test function
+    const connectionResult = await testConnection();
     
-    // Import and test our service using standard Vercel pattern
-    const clientPromise = (await import('../../lib/mongodb')).default;
-    
-    const startTime = Date.now();
-    const client = await clientPromise;
-    const connectionTime = Date.now() - startTime;
-    
-    console.log(`⏱️ Connection established in ${connectionTime}ms`);
-    
-    // Test database operations
-    const db = client.db(process.env.MONGODB_DATABASE || 'ADY');
-    
-    // List collections
-    const collectionsStartTime = Date.now();
-    const collections = await db.listCollections().toArray();
-    const collectionsTime = Date.now() - collectionsStartTime;
-    
-    console.log(`📚 Found ${collections.length} collections in ${collectionsTime}ms`);
-    
-    // Test collection access
-    const collection = db.collection(process.env.MONGODB_COLLECTION || 'Data');
-    
-    const countStartTime = Date.now();
-    const documentCount = await collection.estimatedDocumentCount();
-    const countTime = Date.now() - countStartTime;
-    
-    console.log(`📊 Document count: ${documentCount} (${countTime}ms)`);
-    
-    // Test a simple query
-    const queryStartTime = Date.now();
-    const sample = await collection.findOne({});
-    const queryTime = Date.now() - queryStartTime;
-    
-    console.log(`🔍 Sample query completed in ${queryTime}ms`);
-    
-    await client.close();
-    
-    const result = {
-      status: 'success',
-      message: 'MongoDB Atlas connection fully operational!',
+    const response = {
+      ...connectionResult,
       diagnostics,
-      performance: {
-        connectionTime: `${connectionTime}ms`,
-        collectionsTime: `${collectionsTime}ms`,
-        countTime: `${countTime}ms`,
-        queryTime: `${queryTime}ms`,
-        totalTime: `${Date.now() - startTime}ms`
-      },
-      database: {
-        collections: collections.map(c => c.name),
-        documentCount,
-        sampleDocument: sample ? Object.keys(sample) : null
-      }
-    };
-    
-    console.log('✅ Diagnostic complete - all tests passed');
-    res.status(200).json(result);
-    
-  } catch (error) {
-    console.error('❌ Diagnostic failed:', error);
-    
-    const errorInfo = {
-      status: 'error',
-      message: 'MongoDB connection diagnostic failed',
-      diagnostics,
-      error: {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack?.substring(0, 500) : null
-      },
-      troubleshooting: {
+      troubleshooting: connectionResult.status === 'error' ? {
         commonIssues: [
           'MongoDB Atlas IP whitelist: Add 0.0.0.0/0 to Network Access',
           'Incorrect credentials in connection string',
           'Atlas cluster is paused or deleted',
-          'Database/collection names mismatch',
-          'Vercel region blocked by Atlas'
+          'SSL/TLS certificate issues'
         ],
         debugSteps: [
           '1. Check MongoDB Atlas Dashboard → Network Access',
           '2. Verify cluster is running (not paused)',
           '3. Test connection string locally',
-          '4. Check Vercel environment variables',
-          '5. Review Atlas logs for connection attempts'
+          '4. Review Atlas logs for connection attempts'
         ]
-      }
+      } : undefined
     };
     
-    res.status(500).json(errorInfo);
+    if (connectionResult.status === 'success') {
+      res.status(200).json(response);
+    } else {
+      res.status(500).json(response);
+    }
+    
+  } catch (error) {
+    console.error('❌ Debug API failed:', error);
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Debug API internal error',
+      diagnostics,
+      error: {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }
+    });
   }
 }
