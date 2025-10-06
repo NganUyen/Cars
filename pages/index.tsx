@@ -1,6 +1,5 @@
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
-import '../styles/globals.css'
 
 interface DatabaseStats {
   totalCars: number;
