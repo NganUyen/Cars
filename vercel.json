@@ -10,10 +10,5 @@
     "pages/api/crawler/status.ts": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "MONGODB_URL": "@mongodb_url",
-    "MONGODB_DATABASE": "@mongodb_database",
-    "MONGODB_COLLECTION": "@mongodb_collection"
   }
 }
