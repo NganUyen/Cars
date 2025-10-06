@@ -28,9 +28,9 @@ export default async function handler(
   console.log('🎯 API Request: Database Stats');
 
   try {
-    // Try the Vercel-optimized MongoDB service - NO FALLBACK TO DEMO DATA
-    const { getReliableStats } = await import('../../../lib/mongoService');
-    const stats = await getReliableStats();
+    // Use the standard Vercel + MongoDB pattern
+    const { getDatabaseStats } = await import('../../../lib/mongodb');
+    const stats = await getDatabaseStats();
     
     console.log('✅ Successfully retrieved database statistics');
     res.status(200).json(stats);

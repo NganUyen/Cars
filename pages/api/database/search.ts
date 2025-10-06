@@ -53,9 +53,9 @@ export default async function handler(
 
     console.log(`Searching for: make=${make}, model=${model}, limit=${searchLimit}`);
 
-    // Try the Vercel-optimized MongoDB service
-    const { searchCarsByMakeModel } = await import('../../../lib/mongoService');
-    const results = await searchCarsByMakeModel(
+    // Use the standard Vercel + MongoDB pattern
+    const { searchCars } = await import('../../../lib/mongodb');
+    const results = await searchCars(
       make as string, 
       model as string, 
       searchLimit

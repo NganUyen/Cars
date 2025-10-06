@@ -35,11 +35,11 @@ export default async function handler(
   try {
     console.log('🧪 Testing MongoDB connection...');
     
-    // Import and test our service
-    const { createVercelMongoConnection } = await import('../../lib/mongoService');
+    // Import and test our service using standard Vercel pattern
+    const clientPromise = (await import('../../lib/mongodb')).default;
     
     const startTime = Date.now();
-    const client = await createVercelMongoConnection();
+    const client = await clientPromise;
     const connectionTime = Date.now() - startTime;
     
     console.log(`⏱️ Connection established in ${connectionTime}ms`);
