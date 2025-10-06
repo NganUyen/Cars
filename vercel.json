@@ -12,8 +12,8 @@
     }
   },
   "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "MONGODB_DATABASE": "@mongodb_database", 
+    "MONGODB_URL": "@mongodb_url",
+    "MONGODB_DATABASE": "@mongodb_database",
     "MONGODB_COLLECTION": "@mongodb_collection"
   }
 }
