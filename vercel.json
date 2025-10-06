@@ -1,0 +1,19 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "pages/api/database/stats.ts": {
+      "maxDuration": 60
+    },
+    "pages/api/database/search.ts": {
+      "maxDuration": 60
+    },
+    "pages/api/crawler/status.ts": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "MONGODB_URI": "@mongodb_uri",
+    "MONGODB_DATABASE": "@mongodb_database", 
+    "MONGODB_COLLECTION": "@mongodb_collection"
+  }
+}
